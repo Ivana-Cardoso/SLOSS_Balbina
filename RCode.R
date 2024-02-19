@@ -3,7 +3,7 @@
 #
 # Ivana Cardoso - ivanawaters@gmail.com
 #
-# Last modification: February 16, 2024
+# Last modification: February 19, 2024
 
 # Set working directory
 setwd("C:/Users/Ivana/OneDrive/PhD_INPA/2.SLOSS_question/Analises/SLOSS_Balbina")
@@ -13,6 +13,10 @@ library(raster)
 library(terra)
 library(sf)
 library(landscapemetrics)
+library(ggplot2)
+library(ggpubr)
+
+#### SELECTING LANDSCAPE SITES ####
 
 # Import data
 MAPBIOMAS <- raster("https://storage.googleapis.com/mapbiomas-public/initiatives/brasil/collection_8/lclu/coverage/brasil_coverage_2022.tif")
@@ -49,8 +53,37 @@ grid <- sp::makegrid(extent_grid, cellsize = 4000) # evenly spaced points (4km)
 points(grid, pch=".")
 
 
-# Create 2km-radius landscapes around each point
+# Calculate number of forest patches in 2 km-radius landscape
+# https://r-spatialecology.github.io/landscapemetrics/articles/guide_sample_lsm.html
 grid <- st_as_sf(grid, coords = c("x1", "x2"), crs = new_crs)
-landscapes <- st_buffer(grid, dist = 2000)
-plot(landscapes, add = TRUE)
+number_patches = landscapemetrics::sample_lsm(Forest_formation, y = grid, size=2000,
+                                              what = "lsm_c_np",
+                                              directions = 8)
+number_patches = subset(number_patches, number_patches$class == 1)
+
+
+# Calculate forest cover in 2 km-radius landscape
+forest_cover = landscapemetrics::sample_lsm(Forest_formation, y = grid, size=2000,
+                                            what = "lsm_c_pland",
+                                            directions = 8)
+forest_cover = subset(forest_cover, forest_cover$class == 1)
+
+
+# Plot number of patches X forest cover
+number_patches$plot_id == forest_cover$plot_id
+metrics <- as.data.frame(cbind(number_patches$plot_id, number_patches$value,
+                               forest_cover$value))
+colnames(metrics) = c("id", "number_patches", "forest_cover")
+
+NP_FC_plot = 
+  ggplot(data = metrics,
+       mapping = aes(x = number_patches, y = forest_cover)) +
+  labs(x = "Number of forest patches",
+       y = "Forest cover (%)") +
+  geom_point() +
+  theme_pubr(base_size = 20)
+ggsave("Number_patches_vs_Forest_cover.png", plot=NP_FC_plot,
+       width = 200, height = 200, units = "mm",
+       dpi = 600)
+
 
