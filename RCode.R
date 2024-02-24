@@ -1,16 +1,15 @@
 # SLOSS cube hypothesis test
-# in Balbina Hidroeletric Dam landscapes
+# in Balbina Hydroelectric Dam landscapes
 #
-# Ivana Cardoso - ivanawaters@gmail.com
+# Author: Ivana Cardoso - ivanawaters@gmail.com
 #
-# Last modification: February 21, 2024
+# Last modification: February 24, 2024
 
 # Set working directory
-setwd("C:/Users/Ivana/OneDrive/PhD_INPA/2.SLOSS_question/Analises/SLOSS_Balbina")
+setwd("C:/Users/Ivana/OneDrive/PhD_INPA/2.SLOSS_question/Analyses/SLOSS_Balbina")
 
 # Load packages
 library(raster)
-library(terra)
 library(sf)
 library(landscapemetrics)
 library(ggplot2)
@@ -23,10 +22,9 @@ MAPBIOMAS <- raster("https://storage.googleapis.com/mapbiomas-public/initiatives
 proj4string(MAPBIOMAS) <- CRS("+init=epsg:4326")
 plot(MAPBIOMAS)
 
-
 # Generate data for Balbina
-Balbina <- as(extent(-60.6,-59.2,-2.1, -0.9), 'SpatialPolygons') # creating a cropping area corresponding to Balbina Hydroelectric Dam
-proj4string(Balbina) = crs("+init=epsg:4326")
+Balbina <- as(extent(-60.6,-59.2,-2.1, -0.9), 'SpatialPolygons') # Create a cropping area corresponding to Balbina Hydroelectric Dam
+proj4string(Balbina) <- CRS("+init=epsg:4326")
 extent(MAPBIOMAS)
 extent(Balbina)
 plot(Balbina, add=TRUE)
@@ -34,130 +32,125 @@ plot(Balbina, add=TRUE)
 Balbina_raster <- raster::crop(MAPBIOMAS, Balbina)
 new_crs <- CRS("+proj=utm +south +zone=21 +datum=WGS84 +units=m +no_defs")
 Balbina_raster <- projectRaster(Balbina_raster, crs=new_crs)
-landscapemetrics::check_landscape(Balbina_raster)
+values(Balbina_raster)  = round(values(Balbina_raster))
+check_landscape(Balbina_raster)
 plot(Balbina_raster)
 
+# Below, I will (1) create an object only with forest pixels to calculate forest cover and the number of forest patches (habitat), and (2) create a new raster with all land-use types except forest (non-habitat)
 
-# Select only forest pixels
-Forest_formation <- Balbina_raster == 3 # select only pixel values corresponding to forest. Reference: https://brasil.mapbiomas.org/wp-content/uploads/sites/4/2023/08/Legenda-Colecao-8-LEGEND-CODE-1.pdf
-Forest_formation <- projectRaster(Forest_formation, crs=new_crs)
-Forest_formation = round(Forest_formation)
-landscapemetrics::check_landscape(Forest_formation)
-plot(Forest_formation)
+# Reference code for land-use type pixel values:  https://brasil.mapbiomas.org/wp-content/uploads/sites/4/2023/08/Legenda-Colecao-8-LEGEND-CODE-1.pdf
 
+# Select only forest pixels 
+forest_formation <- Balbina_raster == 3
+values(forest_formation) <- round(values(forest_formation))
+check_landscape(forest_formation)
+plot(forest_formation)
 
-# Create grid of points with 4km interval
-extent_grid <- as(extent(Forest_formation), 'SpatialPolygons')
+# Select all land-use types except forest
+non_habitat <- Balbina_raster
+non_habitat[!(Balbina_raster != 3)] <- NA
+non_habitat <- projectRaster(non_habitat, crs=new_crs)
+values(non_habitat) <- round(values(non_habitat))
+check_landscape(non_habitat)
+plot(non_habitat)
+
+# Create a grid of points with a 4km interval
+extent_grid <- as(extent(forest_formation), 'SpatialPolygons')
 proj4string(extent_grid) <- crs(new_crs)
-points <- sp::makegrid(extent_grid, cellsize = 4000) # evenly spaced points (4km)
-points(points, pch=".")
+points <- sp::makegrid(extent_grid, cellsize = 4000)  # Evenly spaced points (4km)
+plot(forest_formation)
+points(points, pch = ".")
 
-
-# Calculate number of forest patches in 2 km-radius landscape
-# https://r-spatialecology.github.io/landscapemetrics/articles/guide_sample_lsm.html
+# Calculate the number of patches in a 2 km-radius landscape
+# Reference: https://r-spatialecology.github.io/landscapemetrics/articles/guide_sample_lsm.html
 grid <- st_as_sf(points, coords = c("x1", "x2"), crs = new_crs)
-number_patches = landscapemetrics::sample_lsm(Forest_formation, y = grid, size=2000,
-                                              shape = "square",
-                                              what = "lsm_c_np",
-                                              directions = 8)
-number_patches = subset(number_patches, number_patches$class == 1)
+number_patches <- landscapemetrics::sample_lsm(forest_formation, y = grid, 
+                                               size = 2000,
+                                               shape = "square",
+                                               what = "lsm_c_np",
+                                               directions = 8)
+number_patches <- subset(number_patches, number_patches$class == 1)  # Select only the presence of patches
 
-
-# Calculate forest cover in 2 km-radius landscape
-forest_cover = landscapemetrics::sample_lsm(Forest_formation, y = grid, size=2000,
-                                            shape = "square",
-                                            what = "lsm_c_pland",
-                                            directions = 8)
-forest_cover = subset(forest_cover, forest_cover$class == 1)
-
+# Calculate forest cover in a 2 km-radius landscape
+forest_cover <- landscapemetrics::sample_lsm(forest_formation, y = grid, size = 2000,
+                                             shape = "square",
+                                             what = "lsm_c_pland",
+                                             directions = 8)
+forest_cover <- subset(forest_cover, forest_cover$class == 1)  # Select only the presence of forest
 
 # Plot number of patches X forest cover
 number_patches$plot_id == forest_cover$plot_id
 metrics <- as.data.frame(cbind(number_patches$plot_id, number_patches$value,
                                forest_cover$value))
-colnames(metrics) = c("id", "number_patches", "forest_cover")
+colnames(metrics) <- c("id", "number_patches", "forest_cover")
 
-NP_FC_plot = 
+NP_FC_plot <- 
   ggplot(data = metrics,
          mapping = aes(x = number_patches, y = forest_cover)) +
   labs(x = "Number of forest patches",
        y = "Forest cover (%)") +
   geom_point() +
-  geom_hline(yintercept = c(20, 50))+
+  geom_hline(yintercept = c(20, 40))+
   theme_pubr(base_size = 20)
-  
+
+NP_FC_plot 
+
 ggsave("Number_patches_vs_Forest_cover.png", plot=NP_FC_plot,
        width = 200, height = 200, units = "mm",
        dpi = 600)
 
-
 # Select landscapes with 20 to 40% forest cover because, within these values, forest cover is visually not correlated with number of forest fragments
-metrics = subset(metrics, metrics$forest_cover <= 50 & metrics$forest_cover >= 20)
-cor(metrics$number_patches, metrics$forest_cover) # not correlated (r=-0.32)
-selected_landscapes <- subset(metrics, 
-                              metrics$id == 145 | metrics$id == 583 | 
-                              metrics$id == 503 | metrics$id == 106 |
-                              metrics$id == 112 | metrics$id == 428 |
-                              metrics$id == 259 | metrics$id == 468 |
-                              metrics$id == 143 | metrics$id == 229 |
-                              metrics$id == 422 | metrics$id == 381 |
-                              metrics$id == 188 | metrics$id == 228 |
-                              metrics$id == 105 | metrics$id == 28 |
-                              metrics$id == 226 | metrics$id == 186 |
-                              metrics$id == 376 | metrics$id == 128 |
-                              metrics$id == 624 | metrics$id == 545 |
-                              metrics$id == 585 | metrics$id == 586 |
-                              metrics$id == 546 | metrics$id == 76 |
-                              metrics$id == 299 | metrics$id == 588 |
-                              metrics$id == 387 | metrics$id == 427)
+metrics = subset(metrics, metrics$forest_cover <= 40 & metrics$forest_cover >= 20)
+cor(metrics$number_patches, metrics$forest_cover) # not correlated (r=-0.087)
 
-descarted_landscapes <- subset(metrics, metrics$id == 690 | metrics$id == 727 | 
-                                metrics$id == 646 | metrics$id == 654 |
-                                 metrics$id == 789 | metrics$id == 728 |
-                                 metrics$id == 489 | metrics$id == 331 |
-                                 metrics$id == 749 | metrics$id == 693 |
-                                 metrics$id == 687 | metrics$id == 614 |
-                                 metrics$id == 452)
+# Within this selection (from 20% to 40% forest cover), I searched the NP_FC_plot graph for points at the extremes of the number of patches gradient to make clear the characterization of few large patches and several small patches. I checked the distribution of each point on the map and sought to make a broad selection that covered a significant portion of the study area. I discarded points that I deemed inaccessible due to safety concerns. Below are all selected and discarded landscapes identified by their IDs.
+selected_landscapes <- subset(metrics, 
+                              metrics$id %in% c(145, 583, 503, 106, 112, 428,
+                                                259, 468, 143, 229, 422, 381,
+                                                188, 228, 105, 28, 226, 186,
+                                                376, 128, 624, 545, 585, 586,
+                                                546, 76, 299, 588, 387, 427))
+
+discarded_landscapes <- subset(metrics, metrics$id %in% c(690, 727, 646, 654,
+                                                          789, 728, 489, 331,
+                                                          749, 693, 687, 614,
+                                                          452))
 
 NP_FC_plot +
-geom_point(selected_landscapes, mapping = aes(x=number_patches, y=forest_cover), col = "red")+
-geom_point(descarted_landscapes, mapping = aes(x=number_patches, y=forest_cover), col = "blue")
+  geom_point(selected_landscapes, 
+             mapping = aes(x=number_patches, y=forest_cover), col = "blue")+
+  geom_point(discarded_landscapes, 
+             mapping = aes(x=number_patches, y=forest_cover), col = "red")
+
+cor(selected_landscapes$number_patches, selected_landscapes$forest_cover) # checking correlation of number of patches and forest cover in selected landscapes. Not correlated (r=0.21)
+
+# Visualize in map
+points$id <- seq(1,nrow(points), 1)
+landscapes <- st_buffer(grid, endCapStyle = "SQUARE", dist = 2000)
+landscapes$id <- points$id
+landscapes <- landscapes[landscapes$id %in% selected_landscapes$id,]
+landscapes <- merge(landscapes, metrics, by = "id")
+plot(forest_formation)
+plot(landscapes$geometry, add = TRUE, col = "blue")
+
+# I need 10 landscapes with few large patches and 10 landscapes with many small patches. Therefore, I selected 10 of each, avoiding neighboring landscapes, and maintaining SS above 40 fragments and SL below 20.
+landscapes <- landscapes[-c(3, 6, 8, 11, 14, 17, 20, 23, 29),]
+plot(forest_formation)
+plot(landscapes$geometry, add=TRUE, col="blue")
 
 
-paired_landscapes <- read.csv("paired_landscapes.csv")
-paired_landscapes$group <- as.factor(paired_landscapes$group)
+# Calculate the coverage of other land-uses composing the selected landscapes besides the forest formation.
+non_habitat_cover = landscapemetrics::sample_lsm(non_habitat, 
+                                                 y = landscapes$geometry,
+                                                 plot_id = landscapes$id,
+                                                 shape = "square",
+                                                 what = "lsm_c_pland",
+                                                 directions = 8)
 
-paired = 
-  ggplot(data = paired_landscapes,
-       mapping = aes(x = number_patches, y = forest_cover,
-                     group = group)) +
-  labs(x = "Number of forest patches",
-       y = "Forest cover (%)") +
-  geom_point(size = 3, shape = 16) +
-  geom_line()+
-  theme_pubr(base_size = 20)
-
-paired +
-  geom_point(data = paired_landscapes[21:24,],
-             mapping = aes(x = number_patches, y = forest_cover),
-             color = "red")
-
-correl = paired_landscapes[1:20,]
-
-cor(correl$number_patches, correl$forest_cover)
-
-
-
-# Export data to visualize in QGIS
-plot(Forest_formation)
-points(points, pch=".")
-points$id = seq(1,nrow(points), 1)
-landscapes = st_buffer(grid, endCapStyle = "SQUARE", dist = 2000)
-landscapes$id = points$id
-landscapes = landscapes[landscapes$id %in% metrics$id,]
-landscapes = merge(landscapes, metrics, by="id")
-plot(landscapes, add=T)
-
-writeRaster(Forest_formation, "Floresta_Balbina", format="GTiff")
+# Export files
+dir.create("C:/Users/ivana/OneDrive/PhD_INPA/2.SLOSS_question/Analises/SLOSS_Balbina/Exported_files")
+setwd("C:/Users/ivana/OneDrive/PhD_INPA/2.SLOSS_question/Analises/SLOSS_Balbina/Exported_files")
+writeRaster(forest_formation, "forest_formation", format="GTiff", overwrite=T)
+writeRaster(non_habitat, "non_habitat", format="GTiff", overwrite=T)
 st_write(landscapes, "landscapes.shp", append = F)
-write.csv(selected_landscapes, "selected_landscapes.csv")
+write.csv(non_habitat_cover, "non_habitat_cover.csv")
