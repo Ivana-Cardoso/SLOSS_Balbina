@@ -6,7 +6,7 @@
 # Last modification: February 24, 2024
 
 # Set working directory
-setwd("C:/Users/Ivana/OneDrive/PhD_INPA/2.SLOSS_question/Analyses/SLOSS_Balbina")
+setwd("C:/Users/ivana/OneDrive/PhD_INPA/2.SLOSS_question/Analises/SLOSS_Balbina")
 
 # Load packages
 library(raster)
@@ -16,41 +16,30 @@ library(ggplot2)
 library(ggpubr)
 
 #### SELECTING LANDSCAPE SITES ####
+# I downloaded the land-use cover raster for Brazil in the year 2022 using the MAPBIOMAS Toolkit (https://brasil.mapbiomas.org/colecoes-mapbiomas/) on the Google Engine. In the Google Engine itself, I selected the area of interest by using a shapefile as a mask. This shapefile is available on my GitHub (https://github.com/Ivana-Cardoso/SLOSS_Balbina) as 'Balbina.shp' if you wish to crop it as I did. Alternatively, the raster file is also available on my GitHub as 'Balbina_mapbiomas_collection8_2022.tif'.
 
 # Import data
-MAPBIOMAS <- raster("https://storage.googleapis.com/mapbiomas-public/initiatives/brasil/collection_8/lclu/coverage/brasil_coverage_2022.tif")
-proj4string(MAPBIOMAS) <- CRS("+init=epsg:4326")
-plot(MAPBIOMAS)
-
-# Generate data for Balbina
-Balbina <- as(extent(-60.6,-59.2,-2.1, -0.9), 'SpatialPolygons') # Create a cropping area corresponding to Balbina Hydroelectric Dam
-proj4string(Balbina) <- CRS("+init=epsg:4326")
-extent(MAPBIOMAS)
-extent(Balbina)
-plot(Balbina, add=TRUE)
-
-Balbina_raster <- raster::crop(MAPBIOMAS, Balbina)
+Balbina <- raster("Balbina_mapbiomas_collection8_2022.tif")
 new_crs <- CRS("+proj=utm +south +zone=21 +datum=WGS84 +units=m +no_defs")
-Balbina_raster <- projectRaster(Balbina_raster, crs=new_crs)
-values(Balbina_raster)  = round(values(Balbina_raster))
-check_landscape(Balbina_raster)
-plot(Balbina_raster)
+Balbina <- projectRaster(Balbina, crs=new_crs)
+values(Balbina)  = as.integer(values(Balbina))
+check_landscape(Balbina)
+plot(Balbina)
 
 # Below, I will (1) create an object only with forest pixels to calculate forest cover and the number of forest patches (habitat), and (2) create a new raster with all land-use types except forest (non-habitat)
 
 # Reference code for land-use type pixel values:  https://brasil.mapbiomas.org/wp-content/uploads/sites/4/2023/08/Legenda-Colecao-8-LEGEND-CODE-1.pdf
 
 # Select only forest pixels 
-forest_formation <- Balbina_raster == 3
-values(forest_formation) <- round(values(forest_formation))
+forest_formation <- Balbina == 3
 check_landscape(forest_formation)
 plot(forest_formation)
 
 # Select all land-use types except forest
-non_habitat <- Balbina_raster
-non_habitat[!(Balbina_raster != 3)] <- NA
+non_habitat <- Balbina
+non_habitat[!(Balbina != 3)] <- NA
 non_habitat <- projectRaster(non_habitat, crs=new_crs)
-values(non_habitat) <- round(values(non_habitat))
+values(non_habitat) <- as.integer(values(non_habitat))
 check_landscape(non_habitat)
 plot(non_habitat)
 
@@ -90,7 +79,7 @@ NP_FC_plot <-
   labs(x = "Number of forest patches",
        y = "Forest cover (%)") +
   geom_point() +
-  geom_hline(yintercept = c(20, 40))+
+  geom_hline(yintercept = c(25, 50))+
   theme_pubr(base_size = 20)
 
 NP_FC_plot 
@@ -99,22 +88,24 @@ ggsave("Number_patches_vs_Forest_cover.png", plot=NP_FC_plot,
        width = 200, height = 200, units = "mm",
        dpi = 600)
 
-# Select landscapes with 20 to 40% forest cover because, within these values, forest cover is visually not correlated with number of forest fragments
-metrics = subset(metrics, metrics$forest_cover <= 40 & metrics$forest_cover >= 20)
-cor(metrics$number_patches, metrics$forest_cover) # not correlated (r=-0.087)
+# Select landscapes with 25 to 50% forest cover because, within these values, forest cover is visually not correlated with number of forest fragments
+metrics = subset(metrics, metrics$forest_cover <= 50 & metrics$forest_cover >= 25)
+cor(metrics$number_patches, metrics$forest_cover) # not correlated (r=-0.14)
 
-# Within this selection (from 20% to 40% forest cover), I searched the NP_FC_plot graph for points at the extremes of the number of patches gradient to make clear the characterization of few large patches and several small patches. I checked the distribution of each point on the map and sought to make a broad selection that covered a significant portion of the study area. I discarded points that I deemed inaccessible due to safety concerns. Below are all selected and discarded landscapes identified by their IDs.
+# Within this selection (from 25% to 50% forest cover), I searched the NP_FC_plot graph for points at the extremes of the number of patches gradient to make clear the characterization of few large patches and several small patches. I checked the distribution of each point on the map and sought to make a broad selection that covered a significant portion of the study area. I discarded points that I deemed inaccessible due to safety concerns. Below are all selected and discarded landscapes identified by their IDs.
 selected_landscapes <- subset(metrics, 
-                              metrics$id %in% c(145, 583, 503, 106, 112, 428,
-                                                259, 468, 143, 229, 422, 381,
-                                                188, 228, 105, 28, 226, 186,
-                                                376, 128, 624, 545, 585, 586,
-                                                546, 76, 299, 588, 387, 427))
+                              metrics$id %in% c(145, 583, 503, 112, 428,
+                                                259, 468, 229, 422, 381,
+                                                188, 228, 28, 226, 186,
+                                                545, 585, 146, 586, 546, 
+                                                76, 299, 588, 387, 427, 
+                                                150, 384, 542, 549, 338,
+                                                301, 584))
 
 discarded_landscapes <- subset(metrics, metrics$id %in% c(690, 727, 646, 654,
                                                           789, 728, 489, 331,
                                                           749, 693, 687, 614,
-                                                          452))
+                                                          452, 624, 604))
 
 NP_FC_plot +
   geom_point(selected_landscapes, 
@@ -122,7 +113,7 @@ NP_FC_plot +
   geom_point(discarded_landscapes, 
              mapping = aes(x=number_patches, y=forest_cover), col = "red")
 
-cor(selected_landscapes$number_patches, selected_landscapes$forest_cover) # checking correlation of number of patches and forest cover in selected landscapes. Not correlated (r=0.21)
+cor(selected_landscapes$number_patches, selected_landscapes$forest_cover) # checking correlation of number of patches and forest cover in selected landscapes. Not correlated (r=-0.058)
 
 # Visualize in map
 points$id <- seq(1,nrow(points), 1)
@@ -134,9 +125,11 @@ plot(forest_formation)
 plot(landscapes$geometry, add = TRUE, col = "blue")
 
 # I need 10 landscapes with few large patches and 10 landscapes with many small patches. Therefore, I selected 10 of each, avoiding neighboring landscapes, and maintaining SS above 40 fragments and SL below 20.
-landscapes <- landscapes[-c(3, 6, 8, 11, 14, 17, 20, 23, 29),]
+landscapes <- landscapes[-c(5, 8, 9, 11, 13, 20, 21, 24, 26, 27, 28, 30),]
 plot(forest_formation)
 plot(landscapes$geometry, add=TRUE, col="blue")
+
+cor(landscapes$number_patches, landscapes$forest_cover) # Not correlated (r=-0.019)
 
 
 # Calculate the coverage of other land-uses composing the selected landscapes besides the forest formation.
@@ -154,3 +147,6 @@ writeRaster(forest_formation, "forest_formation", format="GTiff", overwrite=T)
 writeRaster(non_habitat, "non_habitat", format="GTiff", overwrite=T)
 st_write(landscapes, "landscapes.shp", append = F)
 write.csv(non_habitat_cover, "non_habitat_cover.csv")
+
+
+
