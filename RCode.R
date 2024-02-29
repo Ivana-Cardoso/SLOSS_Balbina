@@ -3,7 +3,9 @@
 #
 # Author: Ivana Cardoso - ivanawaters@gmail.com
 #
-# Last modification: February 24, 2024
+# Last modification: February 28, 2024
+
+set.seed(13) # L
 
 # Set working directory
 setwd("C:/Users/ivana/OneDrive/PhD_INPA/2.SLOSS_question/Analises/SLOSS_Balbina")
@@ -11,6 +13,7 @@ setwd("C:/Users/ivana/OneDrive/PhD_INPA/2.SLOSS_question/Analises/SLOSS_Balbina"
 # Load packages
 library(raster)
 library(sf)
+library(terra)
 library(landscapemetrics)
 library(ggplot2)
 library(ggpubr)
@@ -32,6 +35,8 @@ plot(Balbina)
 
 # Select only forest pixels 
 forest_formation <- Balbina == 3
+forest_formation <- projectRaster(forest_formation, crs=new_crs)
+values(forest_formation)  = as.integer(values(forest_formation))
 check_landscape(forest_formation)
 plot(forest_formation)
 
@@ -131,6 +136,20 @@ plot(landscapes$geometry, add=TRUE, col="blue")
 
 cor(landscapes$number_patches, landscapes$forest_cover) # Not correlated (r=-0.019)
 
+# Mean and sd number of forest fragments and forest cover for our 'Several Small' and 'Single Large' landscapes
+SS =  landscapes[landscapes$number_patches >= 40,]
+SL = landscapes[landscapes$number_patches <= 20,]
+
+mean(SS$number_patches) # 45.9
+sd(SS$number_patches) # 7.17
+mean(SS$forest_cover) # 35.86
+sd(SS$forest_cover) # 7.65
+
+mean(SL$number_patches) # 14.9
+sd(SL$number_patches) # 3.28
+mean(SL$forest_cover)# 35.11
+sd(SL$forest_cover) # 7.75
+
 
 # Calculate the coverage of other land-uses composing the selected landscapes besides the forest formation.
 non_habitat_cover = landscapemetrics::sample_lsm(non_habitat, 
@@ -149,4 +168,75 @@ st_write(landscapes, "landscapes.shp", append = F)
 write.csv(non_habitat_cover, "non_habitat_cover.csv")
 
 
+#### SELECTING SAMPLING POINTS FOR DEPLOYMENT OF AUDIO RECORDERS ####
+# I modified Pavel's function (with his permission) to randomly select only 10 points in each landscape while respecting a minimum distance of 200 meters. The original function is available at: https://github.com/pdodonov/sampling
+setwd("C:/Users/ivana/OneDrive/PhD_INPA/2.SLOSS_question/Analises/SLOSS_Balbina")
+source("siteSelection_v0.8.R")
+
+# Each audio recorder covers an area of 50m, so, to avoid that audio recorder points fall on the edge of the landscape and on the edge of fragments, I will (1) create a buffer 100 m inside each landscape and (2) create a buffer 100 m inside each forest fragment, so the area of the audio recorder will be inside the fragment and not in its edges.
+buffer_landscapes <- sf::st_buffer(landscapes, dist = -100)
+
+# Using QGIS v.3.34 I transformed forest_cover raster into polygons, selected only the forest polygons (raster value = 1) and created a buffer 50 m inside all fragments. I will import it:
+buffer_forest <- read_sf("Forest_buffer.shp")
+buffer_forest <- st_set_crs(buffer_forest, new_crs)
+
+recorder_points <- data.frame()
+
+for (i in 1:20) {
+  set.seed(13)
+  
+  # Extract the values from the extent of landscape i
+  landscape <- as(extent(buffer_landscapes[i, 4]), 'SpatialPolygons')
+  proj4string(landscape) <- crs(new_crs)
+  
+  # Create points equally spaced at 100 meters within the extent of landscape i  
+  recorders.i <- sp::makegrid(landscape, cellsize = 100)
+  recorders.i <- st_as_sf(recorders.i, coords = c("x1", "x2"), crs = new_crs)
+  
+  # Extracts the raster values at the point locations and selects only the points in the forest (value = 1)
+  recorders.i <- recorders.i[buffer_forest,]
+  recorders.i <- st_set_crs(recorders.i, new_crs)
+  
+  # Converts spatial points object into a data.frame and identifies each one.  
+  recorders.i <- st_coordinates(recorders.i)
+  recorders.i <- as.data.frame(recorders.i)
+  recorders.i$id <- 1:nrow(recorders.i)
+  
+  # Select random points at least 200 meters apart  
+  recorders <- select.site(x = recorders.i, var.site = "id", 
+                           dist.min = 200, coord.X = "X", 
+                           coord.Y = "Y", Nmax = 10, Nsets = 1, Nmin = 10)
+  
+  # Converts the results into a data.frame, identifies, and adds the coordinates
+  recorders <- as.data.frame(recorders)
+  colnames(recorders) <- "id"
+  recorders <- merge(recorders, recorders.i, by = "id")
+  
+  recorder_points <- rbind(recorder_points, recorders)
+}
+
+plot(forest_formation)
+points(recorder_points$X, recorder_points$Y, pch = 16, col = "blue")
+
+setwd("C:/Users/ivana/OneDrive/PhD_INPA/2.SLOSS_question/Analises/SLOSS_Balbina/Exported_files")
+# write.csv(recorder_points, "recorder_points.csv")
+
+# Out of curiosity: fragments size mean/max/min/sd
+setwd("C:/Users/ivana/OneDrive/PhD_INPA/2.SLOSS_question/Analises/SLOSS_Balbina/Patches")
+SS_area <- read_sf("Patches_SS.shp")
+SS_area <- SS_area$hectares
+min(SS_area)
+max(SS_area)
+mean(SS_area)
+sd(SS_area)
+hist(SS_area)
+
+SL_area <- read_sf("Patches_SL.shp")
+SL_area <- SL_area$hectares
+SL_area <- SL_area[-c(19:21, 23, 27, 31)] # removing continuous forest
+min(SL_area)
+max(SL_area)
+mean(SL_area)
+sd(SL_area)
+hist(SL_area)
 
