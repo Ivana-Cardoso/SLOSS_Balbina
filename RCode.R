@@ -229,7 +229,7 @@ min(SS_area)
 max(SS_area)
 mean(SS_area)
 sd(SS_area)
-hist(SS_area)
+hist(log(SS_area))
 
 SL_area <- read_sf("Patches_SL.shp")
 SL_area <- SL_area$hectares
@@ -238,5 +238,5 @@ min(SL_area)
 max(SL_area)
 mean(SL_area)
 sd(SL_area)
-hist(SL_area)
+hist(log(SL_area))
 
