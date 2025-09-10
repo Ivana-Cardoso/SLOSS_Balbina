@@ -34,6 +34,18 @@ rownames(complete) <- complete$point_ID
 complete$richness <- rowSums(complete[,c(12:180)]) # richness by point
 complete$landscape <- as.factor(complete$landscape)
 
-colSums(matrix(complete$richness, nrow = 10)) # essa nao é a solucao pq ta somando especies que ocorreram em pontos diferentes na paisagem. Deve contar so como 1 para a paisagem, então vou ter que corrigir.
+comm_landscape <- complete %>%
+  group_by(landscape) %>%
+  summarise(across(where(is.numeric), sum), .groups = "drop")
+
+comm_landscape <- comm_landscape[,-c(2:9)]
+
+comm_landscape <- 
+  comm_landscape %>% 
+  mutate(across(where(is.numeric), ~ ifelse(. > 0, 1, 0)))
+
+
+landscapes$richness <- rowSums(comm_landscape[,2:171]) # richness by landscape
+
 
 
