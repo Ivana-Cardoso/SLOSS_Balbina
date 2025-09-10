@@ -135,7 +135,7 @@ NP_FC_plot +
              mapping = aes(x=number_patches, y=forest_cover), col = "green")
 
 
-cor.test(selected_landscapes$number_patches, selected_landscapes$forest_cover) # checking correlation of number of patches and forest cover in selected landscapes. Not correlated (r=-0.09)
+cor.test(selected_landscapes$number_patches, selected_landscapes$forest_cover) # checking correlation of number of patches and forest cover in selected landscapes. Not correlated (r=-0.096)
 
 # Visualize in map
 points$id <- seq(1,nrow(points), 1)
@@ -274,12 +274,13 @@ abline(v = c(-1, 2, 6), col = "red")
 # Medium > 10 ha to 50 ha
 # Large > 50 ha
 
+
 #### SELECTING SAMPLING POINTS ####
 # I modified Pavel's function (with his permission) to randomly select only 10 points in each landscape while respecting a minimum distance of 200 meters. The original function is available at: https://github.com/pdodonov/sampling
 setwd("C:/Users/ivana/OneDrive/PhD_INPA/2.SLOSS_question/Analises/SLOSS_Balbina")
 source("siteSelection_v0.8.R")
 
-# Each audio recorder covers an area of 50m, so, to avoid that audio recorder points fall on the edge of the landscape and on the edge of fragments, I will (1) create a buffer 100 m inside each landscape and (2) create a buffer 100 m inside each forest fragment, so the area of the audio recorder will be inside the fragment and not in its edges.
+# To avoid that the sampling points fall on the edge of the landscape and on the edge of fragments, I will (1) create a buffer 100 m inside each landscape and (2) create a buffer 100 m inside each forest fragment, so the sampling points will be placed inside the fragment interior and not in its edges.
 buffer_landscapes <- sf::st_buffer(landscapes, dist = -100)
 
 # Using QGIS v.3.34 I transformed forest_cover raster into polygons, selected only the forest polygons (raster value = 1) and created a buffer 50 m inside all fragments. I will import it:
@@ -288,7 +289,7 @@ buffer_forest <- st_set_crs(buffer_forest, new_crs)
 
 recorder_points <- data.frame()
 
-for (i in 1:25) {
+for (i in 1:30) {
   set.seed(13)
   
   # Extract the values from the extent of landscape i
@@ -327,21 +328,18 @@ points(recorder_points$X, recorder_points$Y, pch = 16, col = "blue")
 setwd("C:/Users/ivana/OneDrive/PhD_INPA/2.SLOSS_question/Analises/SLOSS_Balbina/Exported_files")
 write.csv(recorder_points, "recorder_points.csv")
 
-# Out of curiosity: fragments size mean/max/min/sd
-setwd("C:/Users/ivana/OneDrive/PhD_INPA/2.SLOSS_question/Analises/SLOSS_Balbina/Patches")
-SS_area <- read_sf("Patches_SS.shp")
-SS_area <- SS_area$hectares
-min(SS_area)
-max(SS_area)
-mean(SS_area)
-sd(SS_area)
-hist(log(SS_area))
 
-SL_area <- read_sf("Patches_SL.shp")
-SL_area <- SL_area$hectares
-SL_area <- SL_area[-c(19:21, 23, 27, 31)] # removing continuous forest
-min(SL_area)
-max(SL_area)
-mean(SL_area)
-sd(SL_area)
-hist(log(SL_area))
+
+
+## alteracao 04/08/25
+## tamanho dos patches com pontos (tamanho da floresta)
+
+setwd("C:/Users/ivana/OneDrive/PhD_INPA/2.SLOSS_question/data")
+
+ants <- read.csv("balbina_ants.csv")
+ants_coord <- ants[,c(3,7:8)]
+ants_coord <- st_as_sf(ants_coord, coords = c("long_utm", "lat_utm"), crs = new_crs)
+
+sampled_patch_size <- extract_lsm(forest_formation, ants_coord, ants_coord$ID, 
+                                  metric = "area", directions = 8)
+write.csv(sampled_patch_size, "sampled_patch_size.csv")
